@@ -1,11 +1,17 @@
 ---
-name: marvis-work-mbti
-description: Safely scan explicitly authorized local work files, export privacy-safe research tables, score Marvis work MBTI, generate a 900x1200 PNG digital-clone report, and collect post-result validation feedback. Use when a user asks to generate, test, validate, or improve a Marvis 工作版 MBTI / 数字分身报告 from local computer data.
+name: marvis-work-mbti-campaign
+description: 基于用户主动授权的本地工作目录，提取不含原文、文件名和完整路径的工作行为统计，判定工作版 MBTI，并生成一张 900×1200 的人格报告图片。内测模式还会在报告展示后征得用户同意，生成本地脱敏数据表和反馈文件，用于优化评分规则；不会自动上传或外发任何数据。当用户要求生成、测试或优化 Marvis 工作版 MBTI、工作人格或数字分身报告时使用。
+license: MIT
+metadata:
+  author: meiruiyu
+  version: 1.3.0
 ---
 
 # Marvis Work MBTI
 
 Run one user-visible skill with four internal modules: evidence collection, scoring, report generation, and beta validation. Keep raw scanning evidence, research exports, and visual products separate.
+
+Requires Marvis desktop, Python 3, and a local Chrome or Chromium browser. Run locally and analyze only directories explicitly authorized by the user.
 
 ## Required Consent
 
