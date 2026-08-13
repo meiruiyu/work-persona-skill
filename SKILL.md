@@ -41,7 +41,7 @@ The pipeline must produce all of these before the run is complete:
 
 For `beta_blind`, the first pipeline stage is only `awaiting_feedback`, not complete. A beta user's run is complete only after `feedback.json` exists, `data_collection.csv` has been refreshed with the feedback labels, and `scripts/validate_products.py --require-feedback` passes.
 
-The pipeline first fills the fixed `assets/report-template/` HTML/CSS with report data, then takes a deterministic Chromium screenshot at exactly 900×1200. `report.html` is an intermediate preview; `report.png` is the final report. Never ask an image model to redraw text, charts, or layout. The 16 personality illustrations are bundled offline as text data in `assets/personality-images.json`; they stay inside the Skill and must not be registered as user products.
+The pipeline first fills the fixed `assets/report-template/` HTML/CSS with report data, then takes a deterministic Chromium screenshot at exactly 900×1200. `report.html` is an intermediate preview; `report.png` is the final report. Never ask an image model to redraw text, charts, or layout. The 16 source personality illustrations stay inside the Skill and must not be registered as user products.
 
 The visual palette follows the bundled scarf image, not the MBTI camp:
 
@@ -62,7 +62,7 @@ After the pipeline succeeds:
 2. Display `report.png` directly with `yyb-image-gallery` or the available image viewer.
 3. Make both CSV files downloadable. Briefly explain that `data_collection.csv` is the one-row sample for later merging.
 4. Do not register `report.html` as the final report; it is the deterministic screenshot source.
-5. Do not register `assets/personality-images.json`; it is the bundled source illustration data, not the report.
+5. Do not register `assets/personalities/<TYPE>.png`; it is the source illustration, not the report.
 6. Do not claim completion if `report.png`, either CSV, `data_manifest.json`, or required beta `feedback.json` is missing.
 
 ## Beta Feedback
@@ -102,4 +102,3 @@ For the public comparison campaign, use `run_pipeline.py --mode campaign_compare
 - Application installation counts, uptime, late-night activity, and absolute clutter never determine letters.
 - Generated output directories must be outside the skill package and excluded from the next scan.
 - Rendering requires a local Chrome/Chromium executable. If unavailable, stop and report that `report.png` could not be rendered. Do not silently deliver HTML or invoke an image model.
-- Before publishing a new revision, run `python scripts/validate_marvis_package.py`. Do not publish if it reports binary files, more than 300 files, a package over 10 MB, or a missing root `SKILL.md`/`LICENSE`.

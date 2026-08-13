@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import html
 import json
 import subprocess
@@ -166,7 +167,7 @@ def main():
         "palette": profile["palette"],
         "scarf_group": palette["name"],
         "colors": {key: palette[key] for key in ("bg", "accent", "text", "soft", "track")},
-        "personality_image": f"bundled:{type_code}",
+        "personality_image": f"assets/personalities/{profile.get('image', f'{type_code}.png')}",
         "privacy_copy": "只读不改 · 不上传 · 敏感内容自动跳过",
         "campaign_tag": "#生成我的数字分身报告"
     }
@@ -174,11 +175,10 @@ def main():
     output_dir = Path(args.output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     skill_root = Path(__file__).resolve().parent.parent
-    personality_bundle_path = skill_root / "assets" / "personality-images.json"
-    personality_bundle = json.loads(personality_bundle_path.read_text(encoding="utf-8"))
-    personality_data_uri = personality_bundle.get("images", {}).get(type_code)
-    if not personality_data_uri or not personality_data_uri.startswith("data:image/"):
-        raise SystemExit(f"Missing personality image in bundle: {type_code}")
+    personality_filename = Path(report["personality_image"]).name
+    personality_source = skill_root / "assets" / "personalities" / personality_filename
+    if not personality_source.exists():
+        raise SystemExit(f"Missing personality image: {personality_source}")
     report_json = output_dir / "report.json"
     report_html = output_dir / "report.html"
     report_png = output_dir / "report.png"
@@ -187,6 +187,7 @@ def main():
     template_dir = skill_root / "assets" / "report-template"
     template = (template_dir / "template.html").read_text(encoding="utf-8")
     style = (template_dir / "style.css").read_text(encoding="utf-8")
+    personality_data = base64.b64encode(personality_source.read_bytes()).decode("ascii")
     evidence_html = "".join(
         '<li><span class="dot"></span><p>'
         f'<strong>{html.escape(item["title"])}</strong>'
@@ -223,7 +224,7 @@ def main():
         "{{EVIDENCE}}": evidence_html,
         "{{AXES}}": axes_html,
         "{{STATS}}": stats_html,
-        "{{PERSONALITY_DATA_URI}}": personality_data_uri,
+        "{{PERSONALITY_DATA}}": personality_data,
         "{{PRIVACY}}": html.escape(report["privacy_copy"]),
         "{{TAG}}": html.escape(report["campaign_tag"]),
     }
@@ -243,7 +244,7 @@ def main():
         "palette": profile["palette"],
         "report_html": str(report_html),
         "report_png": str(report_png),
-        "personality_asset": f"{personality_bundle_path}#{type_code}",
+        "personality_asset": str(personality_source),
     }, ensure_ascii=False))
 
 

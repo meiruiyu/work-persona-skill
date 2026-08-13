@@ -1,4 +1,3 @@
 Source: user-provided `16工作人格形象` folder on 2026-08-12.
-Mapping: one illustration per four-letter work personality type.
-Runtime rule: load only the selected type from `assets/personality-images.json`.
-The text bundle keeps the Skill offline while meeting Marvis package restrictions.
+Mapping: one PNG per four-letter work personality type.
+Runtime rule: copy only the selected type image into the report output directory.
