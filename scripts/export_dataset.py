@@ -8,6 +8,7 @@ import csv
 import datetime as dt
 import hashlib
 import json
+import zipfile
 from pathlib import Path
 
 
@@ -47,6 +48,35 @@ def anonymous_run_id(evidence: dict) -> str:
         *metadata.get("authorized_root_ids", []),
     ])
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
+
+
+def write_return_bundle(output_dir: Path, include_feedback: bool) -> Path:
+    bundle_path = output_dir / "work_mbti_return_bundle.zip"
+    include_names = [
+        "report.png",
+        "data_collection.csv",
+        "evidence_table.csv",
+        "data_manifest.json",
+    ]
+    if include_feedback:
+        include_names.append("feedback.json")
+    note = (
+        "工作版 MBTI 内测回传包\n"
+        "\n"
+        "请回传“work_mbti_return_bundle.zip”这个文件夹给Angeline。\n"
+        "它是一个 zip 回传包，整体发送即可。\n"
+        "里面包含：报告图片、脱敏数据表、证据明细、隐私授权记录"
+        + ("、用户反馈。\n" if include_feedback else "。\n")
+        + "不需要单独回传 report.html、report.json 或 internal 文件夹。\n"
+        + "本包不包含原文、文件名、完整路径、姓名、联系方式或账号信息。\n"
+    )
+    with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+        for name in include_names:
+            path = output_dir / name
+            if path.exists() and path.stat().st_size > 0:
+                bundle.write(path, arcname=name)
+        bundle.writestr("README_请回传这个zip.txt", note)
+    return bundle_path
 
 
 def main():
@@ -137,6 +167,8 @@ def main():
         "authorization": {
             "authorized_root_count": evidence["metadata"].get("authorized_root_count", 0),
             "authorized_root_ids": evidence["metadata"].get("authorized_root_ids", []),
+            "scan_scope_preset": evidence["metadata"].get("scan_scope_preset"),
+            "lookback_days": evidence["metadata"].get("lookback_days"),
             "scan_started_at": evidence["metadata"].get("scan_started_at"),
             "scan_finished_at": evidence["metadata"].get("scan_finished_at"),
         },
@@ -149,14 +181,24 @@ def main():
         },
         "feedback_status": "collected" if feedback else "pending_user_response",
         "feedback_included": bool(feedback),
-        "files": [collection_path.name, table_path.name] + (["feedback.json"] if feedback else []),
+        "files": [
+            "report.png",
+            collection_path.name,
+            table_path.name,
+        ] + (["feedback.json"] if feedback else []),
+        "participant_return": {
+            "preferred_file": "work_mbti_return_bundle.zip",
+            "note": "请回传“work_mbti_return_bundle.zip”这个文件夹给Angeline；report.html、report.json、internal/ 默认不用回传。",
+        },
     }
     manifest_path = output_dir / "data_manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    bundle_path = write_return_bundle(output_dir, bool(feedback))
     print(json.dumps({
         "data_collection": str(collection_path),
         "evidence_table": str(table_path),
         "manifest": str(manifest_path),
+        "return_bundle": str(bundle_path),
         "feedback_included": bool(feedback),
     }, ensure_ascii=False))
 

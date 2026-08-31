@@ -1,10 +1,10 @@
 {
-  "version": "1.1.0",
+  "version": "1.3.0",
   "palettes": {
-    "red": {"name": "红围脖", "bg": "#F9E9EF", "accent": "#8D2447", "text": "#520E28", "soft": "#F2D5E0", "track": "#EBCFD9"},
-    "green": {"name": "绿围脖", "bg": "#EAF7F3", "accent": "#08735E", "text": "#064F42", "soft": "#D7ECE5", "track": "#CEE5DE"},
-    "yellow": {"name": "黄围脖", "bg": "#FFF1C7", "accent": "#B87D18", "text": "#5A3B08", "soft": "#F6E3A9", "track": "#EFD89B"},
-    "purple": {"name": "紫围脖", "bg": "#F1F0FF", "accent": "#5549BD", "text": "#342D8E", "soft": "#E2E0F8", "track": "#D8D6F1"}
+    "red": {"name": "红围脖", "bg": "#FFF9FB", "accent": "#922347", "text": "#43091F", "soft": "#FCECF2", "track": "#F2DCE5"},
+    "green": {"name": "绿围脖", "bg": "#FBFFFD", "accent": "#08735E", "text": "#033D34", "soft": "#EAF8F3", "track": "#D9EEE7"},
+    "yellow": {"name": "黄围脖", "bg": "#FFFDF7", "accent": "#A86B08", "text": "#432A03", "soft": "#FFF3D2", "track": "#F3E2B6"},
+    "purple": {"name": "紫围脖", "bg": "#FCFBFF", "accent": "#5145B5", "text": "#292272", "soft": "#EFEDFF", "track": "#DFDBF7"}
   },
   "camps": {
     "NT": {"name": "解题脑", "description": "爱研究、搭逻辑、想新解法"},

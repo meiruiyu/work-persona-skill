@@ -7,9 +7,14 @@
   "properties": {
     "schema_version": {"const": "1.0.0"},
     "raw_work_type": {"type": "string", "pattern": "^[EI][SN][TF][JP]$"},
-    "psychological_type": {"type": "string", "pattern": "^[EI][SN][TF][JP]$"},
-    "psychological_type_source": {"enum": ["known", "formal_test", "micro_questions"]},
-    "matched_letters": {"type": "integer", "minimum": 0, "maximum": 4},
+    "psychological_type": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[EI][SN][TF][JP]$"},
+        {"const": "UNKNOWN"}
+      ]
+    },
+    "psychological_type_source": {"enum": ["self_selected", "unknown"]},
+    "matched_letters": {"type": ["integer", "null"], "minimum": 0, "maximum": 4},
     "axis_fit": {
       "type": "object",
       "required": ["EI", "SN", "TF", "JP"],
@@ -26,6 +31,22 @@
     "quirk_fun": {"type": "integer", "minimum": 1, "maximum": 7},
     "privacy_comfort": {"type": "integer", "minimum": 1, "maximum": 7},
     "share_intent": {"type": "integer", "minimum": 1, "maximum": 7},
+    "improvement_suggestion": {"type": "string", "maxLength": 300},
+    "ui_choices": {
+      "type": "object",
+      "properties": {
+        "EI": {"enum": ["", "accurate", "mixed", "wrong"]},
+        "SN": {"enum": ["", "accurate", "mixed", "wrong"]},
+        "TF": {"enum": ["", "accurate", "mixed", "wrong"]},
+        "JP": {"enum": ["", "accurate", "mixed", "wrong"]},
+        "overall": {"enum": ["", "yes", "mixed", "no"]},
+        "evidence": {"enum": ["", "yes", "mixed", "no"]},
+        "quirk": {"enum": ["", "yes", "mixed", "no"]},
+        "privacy": {"enum": ["", "yes", "mixed", "no"]},
+        "share": {"enum": ["", "yes", "mixed", "no"]}
+      },
+      "additionalProperties": false
+    },
     "most_accurate_metric": {"type": "string"},
     "least_accurate_metric": {"type": "string"},
     "occupation_group": {"type": "string"},

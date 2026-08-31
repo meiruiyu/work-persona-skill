@@ -1,3 +1,4 @@
 Source: user-provided `16工作人格形象` folder on 2026-08-12.
 Mapping: one PNG per four-letter work personality type.
-Runtime rule: copy only the selected type image into the report output directory.
+Processing: backgrounds and bottom labels were removed; all 16 files are RGBA PNGs with transparent pixels.
+Runtime rule: embed only the selected type image as base64 inside the fixed report HTML; never register source assets as user products.

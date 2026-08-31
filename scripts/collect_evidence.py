@@ -18,7 +18,7 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 
-VERSION = "1.1.0-beta"
+VERSION = "1.4.0-beta"
 NOW = dt.datetime.now(dt.timezone.utc)
 
 EXCLUDED_DIRS = {
@@ -72,6 +72,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", required=True, help="Output evidence JSON path.")
     parser.add_argument("--max-docs", type=int, default=300, help="Maximum recent documents sampled for transient local classification.")
     parser.add_argument("--sample-chars", type=int, default=200, help="Maximum transient text characters per sampled document.")
+    parser.add_argument("--lookback-days", type=int, choices=(90, 180, 365), default=365, help="Include only files modified inside this user-authorized window.")
+    parser.add_argument("--scope-label", choices=("desktop", "documents", "downloads", "work-core", "work-triad", "custom"), default="custom", help="Privacy-safe label for the selected directory option.")
+    parser.add_argument("--app-inventory-json", help="Optional Marvis local app inventory aggregate. Stored as gray research data only; never scores letters.")
+    parser.add_argument("--image-summary-json", help="Optional Marvis local image category aggregate for the authorized scope. Uses counts only, never raw images or OCR text.")
     return parser.parse_args()
 
 
@@ -176,6 +180,57 @@ def gray(value, unit: str, lineage: str) -> dict:
     return {"value": value, "unit": unit, "scoring_weight": 0, "source_lineage": [lineage]}
 
 
+def load_optional_json(path_text: str | None) -> dict:
+    if not path_text:
+        return {}
+    path = Path(path_text).expanduser()
+    if not path.exists() or not path.is_file():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def numeric_counts(value) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    counts = {}
+    for key, raw in value.items():
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            counts[normalize(str(key))] = number
+    return counts
+
+
+def app_inventory(data: dict) -> tuple[int, dict[str, float], list[str]]:
+    """Keep app inventory as optimization data, not scoring evidence."""
+    category_counts = numeric_counts(data.get("categories") or data.get("category_counts"))
+    names = []
+    apps = data.get("apps")
+    if isinstance(apps, list):
+        for item in apps:
+            if isinstance(item, dict):
+                name = str(item.get("name") or item.get("display_name") or "").strip()
+                category = normalize(str(item.get("category") or item.get("type") or "uncategorized"))
+                if category:
+                    category_counts[category] = category_counts.get(category, 0) + 1
+            else:
+                name = str(item).strip()
+            if name:
+                names.append(name[:80])
+    total = int(data.get("total") or data.get("installed_app_count") or len(names) or sum(category_counts.values()) or 0)
+    return total, category_counts, sorted(set(names))[:120]
+
+
+def category_sum(counts: dict[str, float], labels: set[str]) -> float:
+    return sum(value for key, value in counts.items() if key in labels)
+
+
 def project_capped_pair(records: list[dict], left_value, right_value) -> tuple[float, float, int]:
     """Aggregate one normalized vote per project so a project cannot dominate."""
     grouped: dict[str, list[float]] = collections.defaultdict(lambda: [0.0, 0.0])
@@ -203,6 +258,9 @@ def main() -> int:
     args = parse_args()
     roots = [Path(value).expanduser().resolve() for value in args.root]
     excluded_paths = [Path(value).expanduser().resolve() for value in args.exclude]
+    image_summary = load_optional_json(args.image_summary_json)
+    app_summary = load_optional_json(args.app_inventory_json)
+    app_total, app_categories, app_names = app_inventory(app_summary)
     missing = [str(root) for root in roots if not root.exists() or not root.is_dir()]
     if missing:
         print(f"Invalid authorized roots: {', '.join(missing)}", file=sys.stderr)
@@ -250,6 +308,9 @@ def main() -> int:
                     excluded["unsupported"] += 1
                     continue
                 bucket, recency, age_days = recency_bucket(stat.st_mtime)
+                if age_days > args.lookback_days:
+                    excluded["outside_time_window"] += 1
+                    continue
                 time_windows[bucket] += 1
                 extension_counts[ext or "none"] += 1
                 total_bytes += stat.st_size
@@ -437,21 +498,22 @@ def main() -> int:
         periodic_right += right / total
     eligible_project_count = terminal_projects + open_projects
 
-    top_level_groups: dict[tuple[int, str], list[str]] = collections.defaultdict(list)
-    for root_index, root in enumerate(roots):
+    top_level_groups: dict[tuple[int, str], set[str]] = collections.defaultdict(set)
+    for record in records:
         try:
-            for child in root.iterdir():
-                if child.is_dir() and not child.name.startswith("."):
-                    name = normalize(child.name)
-                    if DATE_TOKEN.search(name):
-                        kind = "date"
-                    elif any(word in name for word in KEYWORDS["specific"]):
-                        kind = "stage"
-                    else:
-                        kind = "project"
-                    top_level_groups[(root_index, kind)].append(name)
-        except OSError:
-            pass
+            relative = record["path"].relative_to(roots[record["root_index"]])
+        except (OSError, ValueError):
+            continue
+        if len(relative.parts) < 2:
+            continue
+        name = normalize(relative.parts[0])
+        if DATE_TOKEN.search(name):
+            kind = "date"
+        elif any(word in name for word in KEYWORDS["specific"]):
+            kind = "stage"
+        else:
+            kind = "project"
+        top_level_groups[(record["root_index"], kind)].add(name)
     folder_kinds = collections.Counter()
     for (root_index, kind), names in top_level_groups.items():
         folder_kinds[(root_index, kind)] += len(names)
@@ -497,24 +559,66 @@ def main() -> int:
     image_records = [r for r in records if r["ext"] in IMAGE_EXTENSIONS]
     screenshot_count = sum(1 for r in image_records if "screenshot" in r["name"] or "截屏" in r["name"] or "截图" in r["name"])
     selfie_count = sum(1 for r in image_records if "photo booth" in normalize(str(r["path"].parent.name)) or "自拍" in r["name"])
+    image_categories = numeric_counts(image_summary.get("categories") or image_summary.get("category_counts"))
+    recognized_images = int(image_summary.get("recognized_image_count") or image_summary.get("total") or sum(image_categories.values()) or 0)
+    image_coverage = min(1.0, recognized_images / max(1, len(image_records))) if image_categories else 0.0
+    image_specific = category_sum(image_categories, {
+        "chart", "charts", "graph", "graphs", "table", "spreadsheet", "dashboard",
+        "document_scan", "document", "receipt", "ticket", "screenshot", "code_screenshot",
+        "图表", "表格", "数据图", "仪表盘", "文档扫描", "票据", "截图", "代码截图"
+    })
+    image_exploratory = category_sum(image_categories, {
+        "whiteboard", "brainstorm", "moodboard", "design_reference", "inspiration",
+        "concept", "reference", "sketch", "白板", "脑暴", "灵感", "参考", "草图", "概念"
+    })
+    image_logic = category_sum(image_categories, {
+        "chart", "charts", "graph", "graphs", "table", "spreadsheet", "dashboard",
+        "code_screenshot", "data_visualization", "数据图", "图表", "表格", "仪表盘", "代码截图"
+    })
+    image_expression = category_sum(image_categories, {
+        "poster", "design", "video_cover", "cover", "brand_visual", "moodboard",
+        "illustration", "海报", "设计稿", "封面", "品牌视觉", "插画", "素材"
+    })
+    # One project can export hundreds of files at once. Treat one project-hour as
+    # one activity session so bulk exports and folder migrations cannot invent a
+    # fake "most productive hour" for the poster.
+    activity_sessions = {}
+    active_days = set()
+    for record in records:
+        if record["age_days"] > 180 or record["batch_event"]:
+            continue
+        when = dt.datetime.fromtimestamp(record["mtime"])
+        session_key = (when.date().isoformat(), when.hour, record["project"])
+        activity_sessions[session_key] = max(activity_sessions.get(session_key, 0), record["recency"])
+        active_days.add(when.date().isoformat())
+
     late_night = 0.0
     weekend = 0.0
     activity_total = 0.0
     hourly_activity = collections.defaultdict(float)
     weekday_activity = collections.defaultdict(float)
-    for record in records:
-        if record["age_days"] > 365 or record["batch_event"]:
-            continue
-        when = dt.datetime.fromtimestamp(record["mtime"])
-        activity_total += record["recency"]
-        hourly_activity[when.hour] += record["recency"]
-        weekday_activity[when.weekday()] += record["recency"]
-        if when.hour < 6 or when.hour >= 23:
-            late_night += record["recency"]
-        if when.weekday() >= 5:
-            weekend += record["recency"]
+    for (day_text, hour, _project), session_weight in activity_sessions.items():
+        weekday = dt.date.fromisoformat(day_text).weekday()
+        activity_total += session_weight
+        hourly_activity[hour] += session_weight
+        weekday_activity[weekday] += session_weight
+        if hour < 6 or hour >= 23:
+            late_night += session_weight
+        if weekday >= 5:
+            weekend += session_weight
 
     peak_activity_hour = max(hourly_activity, key=hourly_activity.get) if hourly_activity else None
+    ranked_hours = sorted(hourly_activity.values(), reverse=True)
+    peak_share = ranked_hours[0] / activity_total if activity_total and ranked_hours else 0
+    peak_gap = (ranked_hours[0] - ranked_hours[1]) / activity_total if activity_total and len(ranked_hours) > 1 else peak_share
+    session_count = len(activity_sessions)
+    active_day_count = len(active_days)
+    if session_count >= 80 and active_day_count >= 14 and peak_share >= 0.08 and peak_gap >= 0.01:
+        peak_confidence = "high"
+    elif session_count >= 30 and active_day_count >= 5 and peak_share >= 0.06 and peak_gap >= 0.005:
+        peak_confidence = "medium"
+    else:
+        peak_confidence = "low"
     hourly_distribution = {
         str(hour): round(hourly_activity.get(hour, 0) / activity_total, 4) if activity_total else 0
         for hour in range(24)
@@ -538,10 +642,12 @@ def main() -> int:
         "S2": metric(s2_left, s2_right, 1.0, project_coverage(s2_projects), "artifact.role.delivery_exploration", {"delivery_weighted": round(delivery_count, 1), "exploration_weighted": round(exploration_count, 1)}),
         "S3": metric(convergence_projects, branching_projects, 0.5, min(1, (convergence_projects + branching_projects) / 10), "project.version_topology", {"convergent_projects": convergence_projects, "branching_projects": branching_projects}, "degraded"),
         "S4": metric(low_mix_projects, high_mix_projects, 1.0, min(1, (low_mix_projects + high_mix_projects) / 10), "project.topic_mix", {"low_mix_projects": low_mix_projects, "high_mix_projects": high_mix_projects}),
+        "S5": metric(image_specific, image_exploratory, 0.6, image_coverage, "marvis.image_category.information_style", {"specific_work_images": image_specific, "exploratory_work_images": image_exploratory, "recognized_images": recognized_images}, "degraded"),
         "T1": metric(semantic_pairs["T1"][0], semantic_pairs["T1"][1], semantic_reliability, semantic_pairs["T1"][3], "sample.semantic.decision_language", {"logic_signals": semantic["logic"], "expression_signals": semantic["expression"]}, "available" if semantic_pairs["T1"][3] >= 0.6 else "degraded"),
         "T2": metric(compute_projects, expression_projects, 0.6, min(1, (compute_projects + expression_projects) / 10), "project.purpose", {"compute_projects": compute_projects, "expression_projects": expression_projects}, "degraded"),
         "T3": metric(data_iteration_projects, visual_iteration_projects, 1.0, min(1, (data_iteration_projects + visual_iteration_projects) / 8), "project.iteration_mode", {"data_iteration_projects": data_iteration_projects, "visual_iteration_projects": visual_iteration_projects}),
         "T4": metric(0, 0, 0, 0, "app.activity_proxy.work_mode", {"reason": "No separately authorized application activity roots"}, "missing"),
+        "T5": metric(image_logic, image_expression, 0.6, image_coverage, "marvis.image_category.decision_style", {"logic_work_images": image_logic, "expression_work_images": image_expression, "recognized_images": recognized_images}, "degraded"),
         "J1": metric(periodic_left, periodic_right, 1.0, project_coverage(len(periodic_project_votes)), "filename.periodic_chain", {"periodic_chain_count": periodic_chain_count, "irregular_chain_count": irregular_chain_count, "eligible_chain_templates": periodic_chain_count + irregular_chain_count}),
         "J2": metric(j2_left, j2_right, 1.0, project_coverage(j2_projects), "filename.version_structure", {"structured_weighted": round(structured, 1), "unstructured_weighted": round(unstructured, 1)}),
         "J3": metric(terminal_projects, open_projects, 0.6, min(1, eligible_project_count / 10) if eligible_project_count else 0, "project.terminal_state", {"terminal_projects": terminal_projects, "open_projects": open_projects}, "degraded"),
@@ -557,14 +663,25 @@ def main() -> int:
         "extension_type_count": gray(len(extension_counts), "types", "filesystem.extensions"),
         "duplicate_file_estimate": gray(duplicate_count, "files", "filesystem.duplicate_signature"),
         "installed_app_count": gray(sum(1 for r in records if r["ext"] == ".app"), "apps", "app.installation"),
+        "marvis_app_inventory_count": gray(app_total, "apps", "marvis.local_app_inventory"),
+        "marvis_app_category_distribution": gray(app_categories, "apps_by_category", "marvis.local_app_inventory"),
+        "marvis_app_names": gray(app_names, "app_names", "marvis.local_app_inventory"),
         "image_total": gray(len(image_records), "images", "image.inventory"),
+        "marvis_image_recognized_count": gray(recognized_images, "images", "marvis.image_category"),
+        "marvis_image_category_distribution": gray(image_categories, "images_by_category", "marvis.image_category"),
         "selfie_ratio": gray(round(selfie_count / len(image_records), 4) if image_records else 0, "ratio", "image.directory_proxy"),
         "screenshot_ratio": gray(round(screenshot_count / len(image_records), 4) if image_records else 0, "ratio", "image.filename_proxy"),
-        "late_night_activity_ratio": gray(round(late_night / activity_total, 4) if activity_total else 0, "ratio", "timestamp.work_rhythm"),
-        "weekend_activity_ratio": gray(round(weekend / activity_total, 4) if activity_total else 0, "ratio", "timestamp.work_rhythm"),
-        "peak_activity_hour": gray(peak_activity_hour, "hour_0_23", "timestamp.work_rhythm"),
-        "hourly_activity_distribution": gray(hourly_distribution, "ratio_by_hour", "timestamp.work_rhythm"),
-        "weekday_activity_distribution": gray(weekday_distribution, "ratio_by_weekday", "timestamp.work_rhythm"),
+        "late_night_activity_ratio": gray(round(late_night / activity_total, 4) if activity_total else 0, "ratio", "timestamp.project_hour_sessions.180d"),
+        "weekend_activity_ratio": gray(round(weekend / activity_total, 4) if activity_total else 0, "ratio", "timestamp.project_hour_sessions.180d"),
+        "peak_activity_hour": gray(peak_activity_hour, "hour_0_23", "timestamp.project_hour_sessions.180d"),
+        "peak_activity_confidence": gray(peak_confidence, "level", "timestamp.project_hour_sessions.180d"),
+        "peak_activity_share": gray(round(peak_share, 4), "ratio", "timestamp.project_hour_sessions.180d"),
+        "peak_activity_gap": gray(round(peak_gap, 4), "ratio", "timestamp.project_hour_sessions.180d"),
+        "activity_session_count": gray(session_count, "project_hour_sessions", "timestamp.project_hour_sessions.180d"),
+        "activity_active_day_count": gray(active_day_count, "days", "timestamp.project_hour_sessions.180d"),
+        "recent_180_file_count": gray(sum(time_windows.get(key, 0) for key in ("0_90", "91_180")), "files", "filesystem.recency"),
+        "hourly_activity_distribution": gray(hourly_distribution, "ratio_by_hour", "timestamp.project_hour_sessions.180d"),
+        "weekday_activity_distribution": gray(weekday_distribution, "ratio_by_weekday", "timestamp.project_hour_sessions.180d"),
         "extension_distribution": gray(extension_distribution, "files_by_extension", "filesystem.extensions"),
         "oldest_file_age_days": gray(max((r["age_days"] for r in records), default=0), "days", "filesystem.history"),
         "parallel_project_count": gray(sum(1 for items in projects.values() if any(r["age_days"] <= 90 for r in items)), "projects", "project.activity"),
@@ -581,6 +698,8 @@ def main() -> int:
             "scan_finished_at": finished.isoformat(),
             "authorized_root_count": len(roots),
             "authorized_root_ids": [safe_hash(str(root)) for root in roots],
+            "scan_scope_preset": args.scope_label,
+            "lookback_days": args.lookback_days,
             "time_windows": dict(time_windows),
             "valid_file_count": len(records),
             "project_count": len(projects),
@@ -589,6 +708,8 @@ def main() -> int:
             "sampled_document_success_count": sampled_success,
             "semantic_classification_success_rate": round(semantic_success_rate, 4),
             "semantic_classification_coverage": round(semantic_volume_coverage, 4),
+            "image_category_coverage": round(image_coverage, 4),
+            "app_inventory_available": bool(app_summary),
             "app_activity_proxy_coverage": 0.0,
             "batch_timestamp_event_count": sum(1 for count in batch_times.values() if count > 50),
             "rules_version": "scoring-v1-compatible",

@@ -3,36 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=900, initial-scale=1">
-  <title>Marvis 工作版 MBTI</title>
+  <title>{{DISPLAY_NAME}}的工作版MBTI</title>
   <style>{{STYLE}}</style>
 </head>
 <body>
   <main class="poster">
-    <div class="type-mark">{{TYPE}}</div>
-    <header>
-      <div class="eyebrow">你的 Marvis 工作版 MBTI</div>
-      <div class="identity"><span>{{TYPE}}</span><strong>{{NAME}}</strong></div>
-      <div class="tagline">{{TAGLINE}}</div>
+    <header class="hero">
+      <h1>{{DISPLAY_NAME}}的工作版MBTI</h1>
+      <div class="identity-row">
+        <div class="identity-copy">
+          <div class="identity"><span>{{TYPE}}</span><strong>{{NAME}}</strong></div>
+          <div class="tagline">{{TAGLINE}}</div>
+        </div>
+        <div class="mascot-frame">
+          <img src="data:image/png;base64,{{PERSONALITY_DATA}}" alt="{{TYPE}} 工作人格形象">
+        </div>
+      </div>
     </header>
 
     <section class="evidence-section">
-      <div class="section-title">三条铁证 · 你的电脑说的</div>
+      <div class="section-title">三大习惯 · 你的电脑说的</div>
       <ol class="evidence-list">{{EVIDENCE}}</ol>
-      <div class="mascot-frame">
-        <img src="data:image/png;base64,{{PERSONALITY_DATA}}" alt="{{TYPE}} 工作人格形象">
-      </div>
-    </section>
-
-    <section class="axes-section">
-      <div class="section-title">四维结果</div>
-      <div class="axes-list">{{AXES}}</div>
     </section>
 
     <section class="stats">{{STATS}}</section>
 
+    <section class="axes-section">
+      <div class="section-title">四维小结</div>
+      <div class="axes-list">{{AXES}}</div>
+    </section>
+
     <footer>
-      <div class="privacy-mark"><i></i><div><strong>Marvis 本地知识库</strong><span>{{PRIVACY}}</span></div></div>
-      <div class="campaign-tag">{{TAG}}</div>
+      <div class="privacy-mark"><i></i><div><strong>{{PRIVACY_TITLE}}</strong><span>{{PRIVACY}}</span></div></div>
     </footer>
   </main>
 </body>

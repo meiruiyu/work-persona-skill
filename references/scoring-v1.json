@@ -37,10 +37,11 @@
       "left_label": "具体执行型",
       "right_label": "洞察创想型",
       "metrics": [
-        {"id": "S1", "name": "具体任务与概念探索语义", "weight": 0.38, "default_reliability": 0.5, "lineage": "sample.semantic.information_style"},
-        {"id": "S2", "name": "交付型与探索型产出占比", "weight": 0.30, "default_reliability": 1.0, "lineage": "artifact.role.delivery_exploration"},
-        {"id": "S3", "name": "项目收敛链与分支探索链", "weight": 0.22, "default_reliability": 0.5, "lineage": "project.version_topology"},
-        {"id": "S4", "name": "项目内跨主题混搭指数", "weight": 0.10, "default_reliability": 1.0, "lineage": "project.topic_mix"}
+        {"id": "S1", "name": "具体任务与概念探索语义", "weight": 0.35, "default_reliability": 0.5, "lineage": "sample.semantic.information_style"},
+        {"id": "S2", "name": "交付型与探索型产出占比", "weight": 0.27, "default_reliability": 1.0, "lineage": "artifact.role.delivery_exploration"},
+        {"id": "S3", "name": "项目收敛链与分支探索链", "weight": 0.20, "default_reliability": 0.5, "lineage": "project.version_topology"},
+        {"id": "S4", "name": "项目内跨主题混搭指数", "weight": 0.10, "default_reliability": 1.0, "lineage": "project.topic_mix"},
+        {"id": "S5", "name": "图片类别的信息风格", "weight": 0.08, "default_reliability": 0.6, "lineage": "marvis.image_category.information_style"}
       ]
     },
     "TF": {
@@ -49,10 +50,11 @@
       "left_label": "逻辑结果型",
       "right_label": "体验表达型",
       "metrics": [
-        {"id": "T1", "name": "决策语言双边占比", "weight": 0.40, "default_reliability": 0.5, "lineage": "sample.semantic.decision_language"},
-        {"id": "T2", "name": "项目目的双边占比", "weight": 0.30, "default_reliability": 0.6, "lineage": "project.purpose"},
-        {"id": "T3", "name": "数据验证与视觉表达迭代", "weight": 0.18, "default_reliability": 1.0, "lineage": "project.iteration_mode"},
-        {"id": "T4", "name": "开发数据与创意表达应用活跃度", "weight": 0.12, "default_reliability": 0.4, "lineage": "app.activity_proxy.work_mode"}
+        {"id": "T1", "name": "决策语言双边占比", "weight": 0.37, "default_reliability": 0.5, "lineage": "sample.semantic.decision_language"},
+        {"id": "T2", "name": "项目目的双边占比", "weight": 0.27, "default_reliability": 0.6, "lineage": "project.purpose"},
+        {"id": "T3", "name": "数据验证与视觉表达迭代", "weight": 0.16, "default_reliability": 1.0, "lineage": "project.iteration_mode"},
+        {"id": "T4", "name": "开发数据与创意表达应用活跃度", "weight": 0.12, "default_reliability": 0.4, "lineage": "app.activity_proxy.work_mode"},
+        {"id": "T5", "name": "图片类别的决策风格", "weight": 0.08, "default_reliability": 0.6, "lineage": "marvis.image_category.decision_style"}
       ]
     },
     "JP": {
