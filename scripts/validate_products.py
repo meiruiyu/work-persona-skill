@@ -98,8 +98,9 @@ def main() -> None:
             fail(f"habit {index} does not clearly communicate work effort")
     stats = {item["label"]: item for item in report.get("stats", [])}
     peak = stats.get("你的高产时段", {})
-    if peak.get("value") != "样本不足" and peak.get("confidence") not in {"medium", "high"}:
-        fail("peak activity hour is shown without medium/high confidence")
+    late = stats.get("深夜产出占比", {})
+    if peak.get("value") == "样本不足" or late.get("value") == "样本不足":
+        fail("poster time cards must contain an observed value, never '样本不足'")
 
     with (root / "data_collection.csv").open(encoding="utf-8-sig", newline="") as handle:
         collection_rows = list(csv.DictReader(handle))
@@ -123,12 +124,19 @@ def main() -> None:
             bundle_names = set(bundle.namelist())
     except zipfile.BadZipFile:
         fail("work_mbti_return_bundle.zip is not a valid zip file")
-    expected_bundle = {"report.png", "data_collection.csv", "evidence_table.csv", "data_manifest.json"}
+    research_consent = manifest.get("research_consent")
+    expected_bundle = {"report.png", "data_manifest.json"}
+    if research_consent == "yes":
+        expected_bundle.update({"data_collection.csv", "evidence_table.csv"})
     if args.require_feedback:
         expected_bundle.add("feedback.json")
     missing_bundle = sorted(expected_bundle - bundle_names)
     if missing_bundle:
         fail("return bundle missing files: " + ", ".join(missing_bundle))
+    if research_consent == "no":
+        leaked_research_files = sorted({"data_collection.csv", "evidence_table.csv"} & bundle_names)
+        if leaked_research_files:
+            fail("no-consent return bundle contains computer research tables: " + ", ".join(leaked_research_files))
     forbidden_bundle = [name for name in bundle_names if name.startswith("internal/") or name in {"report.html", "report.json"}]
     if forbidden_bundle:
         fail("return bundle contains debug artifacts: " + ", ".join(sorted(forbidden_bundle)))

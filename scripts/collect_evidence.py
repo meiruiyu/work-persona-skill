@@ -584,6 +584,8 @@ def main() -> int:
     # fake "most productive hour" for the poster.
     activity_sessions = {}
     active_days = set()
+    activity_source_level = "strict_project_hour"
+    activity_window_days = 180
     for record in records:
         if record["age_days"] > 180 or record["batch_event"]:
             continue
@@ -591,6 +593,22 @@ def main() -> int:
         session_key = (when.date().isoformat(), when.hour, record["project"])
         activity_sessions[session_key] = max(activity_sessions.get(session_key, 0), record["recency"])
         active_days.add(when.date().isoformat())
+
+    # A narrow folder or a bulk export can leave the strict trace empty even
+    # when usable modification times exist. Collapse those events to one vote
+    # per day-hour so the poster can stay truthful without showing a blank card.
+    if not activity_sessions:
+        fallback_records = [record for record in records if record["age_days"] <= 180]
+        activity_source_level = "collapsed_day_hour_180d"
+        if not fallback_records:
+            fallback_records = [record for record in records if record["age_days"] <= 365]
+            activity_source_level = "collapsed_day_hour_365d"
+            activity_window_days = 365
+        for record in fallback_records:
+            when = dt.datetime.fromtimestamp(record["mtime"])
+            session_key = (when.date().isoformat(), when.hour, "collapsed")
+            activity_sessions[session_key] = max(activity_sessions.get(session_key, 0), record["recency"])
+            active_days.add(when.date().isoformat())
 
     late_night = 0.0
     weekend = 0.0
@@ -619,6 +637,19 @@ def main() -> int:
         peak_confidence = "medium"
     else:
         peak_confidence = "low"
+    if session_count >= 30 and active_day_count >= 5:
+        activity_observation_level = "stable"
+    elif session_count > 0:
+        activity_observation_level = "limited"
+    else:
+        activity_observation_level = "none"
+    peak_activity_period = None
+    if peak_activity_hour is not None:
+        peak_activity_period = {
+            "center_hour": peak_activity_hour,
+            "start_hour": (peak_activity_hour - 1) % 24,
+            "end_hour": (peak_activity_hour + 1) % 24,
+        }
     hourly_distribution = {
         str(hour): round(hourly_activity.get(hour, 0) / activity_total, 4) if activity_total else 0
         for hour in range(24)
@@ -677,8 +708,12 @@ def main() -> int:
         "peak_activity_confidence": gray(peak_confidence, "level", "timestamp.project_hour_sessions.180d"),
         "peak_activity_share": gray(round(peak_share, 4), "ratio", "timestamp.project_hour_sessions.180d"),
         "peak_activity_gap": gray(round(peak_gap, 4), "ratio", "timestamp.project_hour_sessions.180d"),
+        "peak_activity_period": gray(peak_activity_period, "three_hour_period", "timestamp.project_hour_sessions.180d"),
+        "activity_observation_level": gray(activity_observation_level, "level", "timestamp.project_hour_sessions.180d"),
         "activity_session_count": gray(session_count, "project_hour_sessions", "timestamp.project_hour_sessions.180d"),
         "activity_active_day_count": gray(active_day_count, "days", "timestamp.project_hour_sessions.180d"),
+        "activity_source_level": gray(activity_source_level, "level", "timestamp.activity_fallback"),
+        "activity_window_days": gray(activity_window_days, "days", "timestamp.activity_fallback"),
         "recent_180_file_count": gray(sum(time_windows.get(key, 0) for key in ("0_90", "91_180")), "files", "filesystem.recency"),
         "hourly_activity_distribution": gray(hourly_distribution, "ratio_by_hour", "timestamp.project_hour_sessions.180d"),
         "weekday_activity_distribution": gray(weekday_distribution, "ratio_by_weekday", "timestamp.project_hour_sessions.180d"),

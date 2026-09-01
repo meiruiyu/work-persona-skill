@@ -50,25 +50,48 @@ def anonymous_run_id(evidence: dict) -> str:
     return hashlib.sha256(seed.encode("utf-8")).hexdigest()[:16]
 
 
-def write_return_bundle(output_dir: Path, include_feedback: bool) -> Path:
-    bundle_path = output_dir / "work_mbti_return_bundle.zip"
-    include_names = [
-        "report.png",
-        "data_collection.csv",
-        "evidence_table.csv",
-        "data_manifest.json",
-    ]
+def return_bundle_names(research_consent: str, include_feedback: bool) -> list[str]:
+    names = ["report.png", "data_manifest.json"]
+    if research_consent == "yes":
+        names.extend(["data_collection.csv", "evidence_table.csv"])
     if include_feedback:
-        include_names.append("feedback.json")
+        names.append("feedback.json")
+    return names
+
+
+def write_return_bundle(output_dir: Path, include_feedback: bool, research_consent: str) -> Path:
+    bundle_path = output_dir / "work_mbti_return_bundle.zip"
+    include_names = return_bundle_names(research_consent, include_feedback)
+    if research_consent == "yes":
+        contents = (
+            "report.png（你的工作版 MBTI 海报）\n"
+            "data_manifest.json（本次分析说明）\n"
+            "data_collection.csv（脱敏统计数据表）\n"
+            "evidence_table.csv（脱敏判断依据表）\n"
+            "feedback.json（你的体验反馈）\n"
+            "README_请回传这个zip.txt（回传说明）\n"
+        )
+        purpose = "你已选择参与脱敏优化；回传后，这些脱敏统计和体验反馈会用于把 Skill 做得更准。\n"
+    else:
+        contents = (
+            "report.png（你的工作版 MBTI 海报）\n"
+            "data_manifest.json（本次分析说明）\n"
+            "feedback.json（你的体验反馈）\n"
+            "README_请回传这个zip.txt（回传说明）\n"
+        )
+        purpose = "你已选择只回传体验反馈；本包不含 data_collection.csv 和 evidence_table.csv，也就是不含电脑扫描统计表或评分证据表。\n"
     note = (
         "工作版 MBTI 内测回传包\n"
         "\n"
         "请回传“work_mbti_return_bundle.zip”这个文件夹给Angeline。\n"
         "它是一个 zip 回传包，整体发送即可。\n"
-        "里面包含：报告图片、脱敏数据表、证据明细、隐私授权记录"
-        + ("、用户反馈。\n" if include_feedback else "。\n")
+        "\n"
+        "里面包含：\n"
+        f"{contents}"
+        "\n"
+        + purpose
         + "不需要单独回传 report.html、report.json 或 internal 文件夹。\n"
-        + "本包不包含原文、文件名、完整路径、姓名、联系方式或账号信息。\n"
+        + "本包不包含文件名、完整路径、原文、原图、姓名、手机号、邮箱等敏感信息。\n"
     )
     with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         for name in include_names:
@@ -87,6 +110,10 @@ def main():
     feedback = json.loads(Path(args.feedback).read_text(encoding="utf-8")) if args.feedback else {}
     output_dir = Path(args.output_dir).expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
+    if feedback:
+        (output_dir / "feedback.json").write_text(
+            json.dumps(feedback, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     run_id = anonymous_run_id(evidence)
     participant_id = args.participant_id or f"anon-{run_id}"
@@ -158,20 +185,25 @@ def main():
                 "source_lineage": scalar(feature["source_lineage"]),
             })
 
+    authorization = {
+        "scan_scope_preset": evidence["metadata"].get("scan_scope_preset"),
+        "lookback_days": evidence["metadata"].get("lookback_days"),
+    }
+    if args.research_consent == "yes":
+        authorization.update({
+            "authorized_root_count": evidence["metadata"].get("authorized_root_count", 0),
+            "authorized_root_ids": evidence["metadata"].get("authorized_root_ids", []),
+            "scan_started_at": evidence["metadata"].get("scan_started_at"),
+            "scan_finished_at": evidence["metadata"].get("scan_finished_at"),
+        })
+    bundle_files = return_bundle_names(args.research_consent, bool(feedback))
     manifest = {
         "schema_version": "1.1.0",
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "anonymous_run_id": run_id,
         "participant_id": participant_id,
         "research_consent": args.research_consent,
-        "authorization": {
-            "authorized_root_count": evidence["metadata"].get("authorized_root_count", 0),
-            "authorized_root_ids": evidence["metadata"].get("authorized_root_ids", []),
-            "scan_scope_preset": evidence["metadata"].get("scan_scope_preset"),
-            "lookback_days": evidence["metadata"].get("lookback_days"),
-            "scan_started_at": evidence["metadata"].get("scan_started_at"),
-            "scan_finished_at": evidence["metadata"].get("scan_finished_at"),
-        },
+        "authorization": authorization,
         "privacy": {
             "contains_raw_text": False,
             "contains_filenames": False,
@@ -181,19 +213,21 @@ def main():
         },
         "feedback_status": "collected" if feedback else "pending_user_response",
         "feedback_included": bool(feedback),
-        "files": [
-            "report.png",
-            collection_path.name,
-            table_path.name,
-        ] + (["feedback.json"] if feedback else []),
+        "local_generated_files": (
+            ["report.png", collection_path.name, table_path.name]
+            if args.research_consent == "yes"
+            else ["report.png"]
+        ) + (["feedback.json"] if feedback else []),
+        "return_bundle_files": bundle_files,
         "participant_return": {
             "preferred_file": "work_mbti_return_bundle.zip",
-            "note": "请回传“work_mbti_return_bundle.zip”这个文件夹给Angeline；report.html、report.json、internal/ 默认不用回传。",
+            "computer_statistics_included": args.research_consent == "yes",
+            "note": "请回传“work_mbti_return_bundle.zip”这个文件夹给Angeline；B 模式仅包含海报、精简授权记录和已填写的体验反馈。",
         },
     }
     manifest_path = output_dir / "data_manifest.json"
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    bundle_path = write_return_bundle(output_dir, bool(feedback))
+    bundle_path = write_return_bundle(output_dir, bool(feedback), args.research_consent)
     print(json.dumps({
         "data_collection": str(collection_path),
         "evidence_table": str(table_path),

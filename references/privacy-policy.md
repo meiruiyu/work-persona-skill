@@ -26,4 +26,4 @@ The default application inventory flow must not require Full Disk Access. If app
 
 ## Beta feedback
 
-Collect psychological MBTI and ratings only after raw scoring. Store them separately from `evidence.json` and `score.json`. Export feedback for research only after a second explicit confirmation.
+Collect psychological MBTI and ratings only after raw scoring. Store them separately from `evidence.json` and `score.json`. The return-data selector is explicit consent: A permits returning privacy-safe computer aggregates plus feedback; B permits returning the user's explicit experience feedback only and must exclude computer-statistics CSV and evidence tables from the return bundle.

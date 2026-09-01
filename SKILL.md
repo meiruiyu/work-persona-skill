@@ -4,7 +4,7 @@ description: 基于用户主动授权的本地工作目录与 Marvis 本地知�
 license: MIT
 metadata:
   author: meiruiyu
-  version: 1.9.5
+  version: 1.10.0
 ---
 
 # Marvis 工作版 MBTI
@@ -40,17 +40,26 @@ Use Marvis local knowledge base aggregates without adding another user-burden st
 - If Marvis has already recognized installed applications, export app names, broad categories, and installed counts for the research table only. Application installation data never affects the current letters. Do not ask the user to enable Full Disk Access for this default flow.
 - If app usage strength or recent-90-day active days are blocked by macOS privacy/TCC, skip them silently and keep E4/T4 missing. Do not ask users to open System Settings or grant Full Disk Access unless the campaign owner explicitly starts a separate opt-in enhanced test.
 
-Then show a separate research selector:
+Then show one separate two-option return-data selector. Do not add `其他` or a free-text field. The selector must use plain user-facing language:
 
-- `A 同意生成脱敏研究数据表，供算法优化；文件只保存在本机，由我决定是否提交`
-- `B 仅生成报告，不参与研究`
+Title: `是否参与脱敏优化？`
+
+Description: `无论选哪项，你都会获得一张 report.png 工作版 MBTI 海报，并完成体验反馈表。区别只在于：是否愿意把脱敏统计数据一起回传给 Angeline，用来优化这个 Skill。`
+
+- `A 参与脱敏优化（推荐）` — `会生成完整回传包，包含海报、脱敏数据表、判断依据表和你的体验反馈。不包含文件名、完整路径、原文、原图、姓名、手机号、邮箱等敏感信息。包含：report.png、data_manifest.json、data_collection.csv、evidence_table.csv、feedback.json、README_请回传这个zip.txt。`
+- `B 只回传体验反馈` — `只生成海报和体验反馈，不回传电脑扫描统计表，也不回传评分证据表。包含：report.png、data_manifest.json、feedback.json、README_请回传这个zip.txt。`
+
+After the user confirms, acknowledge the selected mode in one sentence before scanning:
+
+- A: `已选择：A 参与脱敏优化。接下来我会只读分析授权范围内的非敏感信息，生成海报和回传包。`
+- B: `已选择：B 只回传体验反馈。接下来我会只读分析授权范围内的非敏感信息，生成海报和简版回传包。`
 
 Before running the pipeline, read the current signed-in Marvis account nickname/display name directly from the account session or profile context. Pass that exact current-account value to `--display-name`; the poster title is always `<current account nickname>的工作版MBTI`.
 
-Do not ask the user to confirm the nickname, choose where to place it, or enter it again. Never hard-code `Angeline` or reuse a previous participant's name. If the account API unexpectedly returns an empty value, use `小马同学` for that run rather than asking another question. The nickname is used only in `report.json`, `report.html`, and `report.png`; never add it to the anonymized research CSV files.
+Do not ask the user to confirm a nickname that was fetched successfully, choose where to place it, or re-enter it. Never hard-code `Angeline` or reuse a previous participant's name. If every account/profile source returns empty, ask exactly one short fallback question with one text field: `没有读取到你的账号昵称。海报顶部想显示什么名字？` Use the answer only for this poster. If the user skips the field or the value is still empty, then and only then use `小马同学`. The nickname is used only in `report.json`, `report.html`, and `report.png`; never add it to the anonymized research CSV files.
 
-- `research-consent=yes`: generate the report and privacy-safe research tables. Do not upload or transmit them automatically. Let the user download and voluntarily submit them to the campaign owner.
-- `research-consent=no`: still generate the report and local tables marked `research_consent=no`; do not ask the user to submit them.
+- `research-consent=yes`: generate the report, local research tables, and feedback. The final return bundle contains `report.png`, `data_manifest.json`, `data_collection.csv`, `evidence_table.csv`, `feedback.json`, and `README_请回传这个zip.txt`. Do not upload or transmit anything automatically; the user voluntarily returns the zip.
+- `research-consent=no`: generate the report and still collect the structured experience feedback. Local calculation artifacts may exist so the report can be produced, but the final return bundle must contain only `report.png`, a minimized `data_manifest.json`, `feedback.json`, and `README_请回传这个zip.txt`; it must not contain `data_collection.csv` or `evidence_table.csv`. Ask the user to return the zip for feedback, never describe B as “仅生成报告” or “不参与任何反馈”.
 
 Never infer permission to scan a home directory, chats, mail, browser history, calendars, private photos, cloud drives, credentials, identity documents, contracts, or medical records.
 
@@ -87,7 +96,7 @@ The pipeline must produce all of these before the run is complete:
 - `output/data_collection.csv`: one privacy-safe row per participant/run for later sample merging and model analysis.
 - `output/evidence_table.csv`: readable W/G evidence-detail table.
 - `output/data_manifest.json`: consent and privacy manifest.
-- `output/work_mbti_return_bundle.zip`: participant return bundle containing the poster and privacy-safe research/feedback files.
+- `output/work_mbti_return_bundle.zip`: participant return bundle. A includes poster + research tables + manifest + feedback; B includes poster + minimized manifest + feedback only.
 - `output/report.json`: structured report content.
 - `output/internal/evidence.json` and `output/internal/score.json`: internal reproducibility files; do not present them as the data-collection table.
 
@@ -124,11 +133,14 @@ Poster copy rules:
 - Title: `<current signed-in Marvis account nickname>的工作版MBTI`; populate it automatically and never ask the user to confirm it.
 - Section title: `三大习惯 · 你的电脑说的`.
 - Exactly three habits are generated by `scripts/build_report.py`; do not improvise or rewrite them during a run.
+- The default habit mix is `one personality proof + two shareable work habits`. Select at least one item from the current type's `evidence_slots`; it may appear only when its measured tendency supports the letter actually shown on the poster. Skip missing, neutral, or contradictory metrics.
+- After the first personality proof, prioritize amusing, plain-language effort facts such as repeated finals, late-night work, weekend work, many projects moving together, periodic delivery, or material preparation. Add a second or third personality metric only when there are not enough truthful and interesting work-habit facts.
+- At least one habit must explain why this user received this personality. For example, an ESFP should have at least one communication, external-delivery, expression/content-purpose, or visual-iteration proof; the remaining habits may show funny but truthful work patterns.
 - Every habit must retain at least one exact count, ratio, time range, or detected fact. Never invent a number, turn file count into task count, or imply that a proxy is a verified work record.
 - Write each habit in conversational, shareable Chinese: a short punchy title plus one or two plain sentences. Use a light joke where it helps, but never mock, shame, diagnose, or insult the user.
-- The three habits must collectively show visible work effort: recent output, projects still moving, recurring delivery, careful revision, late-night work, weekend work, or preparation for incoming requests. The intended takeaway is “这个人工作很认真、很勤奋”, supported by the computer evidence rather than empty praise.
+- The three habits must collectively show both the selected personality and visible work effort: recent output, projects still moving, recurring delivery, careful revision, late-night work, weekend work, or preparation for incoming requests. The intended takeaway is “这个人格有电脑证据，而且这个人工作很认真、很勤奋”, supported by measured facts rather than empty praise.
 - Never expose internal metric IDs or professional terms such as “聚类”, “语义”, “加权”, “置信度”, “指标”, “样本”, “活跃会话”, “时间戳”, “双边占比”, “收敛链”, “KL 距离”, or “加权贡献” on the poster.
-- The four stats are `份工作足迹 / 个项目线索 / 你的高产时段 / 深夜产出占比`. Time stats use only recent 180-day project-hour sessions after bulk timestamp removal. If coverage or peak separation is insufficient, display `样本不足` rather than inventing a result.
+- The four stats are `份工作足迹 / 个项目线索 / 你的高产时段 / 深夜产出占比`. Time stats use that user's own file modification times and must be recalculated independently on every run. First use recent-180-day project-hour sessions after collapsing same-second bulk exports; if none remain, collapse recent file events to one event per day-hour; if the selected folder has no recent-180-day event, use the same collapsed method over the latest 365 days. Never hardcode `17:00前后`, `25%`, `0%`, or any other example value. Never put `样本不足` on the poster. When at least one observed event exists, take that user's observed peak hour and render its surrounding three-hour period with the dynamic label `HH:00前后`; render that user's observed late-night share, including a genuine `0%`. Keep source level, window days, session count, active-day count, peak separation, and `activity_observation_level=stable/limited/none` in research data so low-volume runs remain auditable. Only when the authorized latest-365-day scope contains no usable file time at all may the poster use `暂无记录` and `0%`; never invent a nonzero time or ratio.
 - Footer appears only at bottom left: `Marvis本地知识库 · 你的文件管家` and `只读不改 · 敏感内容自动跳过 · 端侧模型生成不上传`.
 - Do not place a campaign hashtag or any AI watermark on the poster.
 
@@ -140,7 +152,7 @@ After the pipeline succeeds:
 
 1. Register `report.png` and `work_mbti_return_bundle.zip` with `declare_products`.
 2. Display `report.png` directly with `yyb-image-gallery` or the available image viewer.
-3. Tell beta users exactly: `请回传“work_mbti_return_bundle.zip”这个文件夹给Angeline。`
+3. Tell beta users exactly: `请回传“work_mbti_return_bundle.zip”这个文件夹给Angeline。` For B, also state: `其中不含电脑扫描统计 CSV 或评分证据表。`
 4. Do not register `report.html` as the final report; it is the deterministic screenshot source.
 5. Do not register `assets/personalities/<TYPE>.png`; it is the source illustration, not the report.
 6. Do not register anything from `work-mbti-output/16-personality-posters/`; that folder is a QA/reference sample set, not the current user's product.
@@ -196,7 +208,7 @@ For the public comparison campaign, use `run_pipeline.py --mode campaign_compare
 - `evidence_table.csv` lists each W/G field with evidence values, coverage, reliability, source lineage, and scoring weight.
 - `data_manifest.json` records scan scope, consent, privacy guarantees, generated file list, and participant-return instructions.
 - `feedback.json` stores the user's psychological MBTI, the four axis feedback choices, overall fit, evidence accuracy, fun, privacy comfort, share intent, and optional improvement suggestion. It is generated only after the report is shown.
-- `work_mbti_return_bundle.zip` is the only normal beta return file. Before feedback it contains `report.png`, `data_collection.csv`, `evidence_table.csv`, and `data_manifest.json`; after feedback it also contains `feedback.json`. Beta participants should download and return this one zip package.
+- `work_mbti_return_bundle.zip` is the only normal beta return file. With A, it contains `report.png`, `data_collection.csv`, `evidence_table.csv`, `data_manifest.json`, and after feedback `feedback.json`. With B, it contains only `report.png`, minimized `data_manifest.json`, and after feedback `feedback.json`; the two CSV files remain outside the return bundle. Beta participants should return this one zip package.
 - `report.html`, `report.json`, and `internal/` are debugging artifacts and are not included in the return bundle unless the campaign owner asks for troubleshooting.
 - The tables contain no raw text, filenames, full paths, names, contacts, or recovered entities.
 - One user's files stay local unless they explicitly submit them. Automatic multi-user aggregation requires a product-approved upload endpoint; do not invent one.

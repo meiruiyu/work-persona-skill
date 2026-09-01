@@ -28,6 +28,6 @@
     "ISTP": {"name": "实操解题手", "camp": "SP", "palette": "yellow", "tagline": "遇到问题你擅长直接拆开、试试、修掉。", "evidence_slots": ["T3", "S2", "J5"]},
     "ISFP": {"name": "质感创作家", "camp": "SP", "palette": "yellow", "tagline": "同一份东西到你手里，总能变得更顺眼一点。", "evidence_slots": ["T3", "T2", "S1"]},
     "ESTP": {"name": "临场开工王", "camp": "SP", "palette": "yellow", "tagline": "任务来了先开干，很多问题都是做着做着解决的。", "evidence_slots": ["S4", "T3", "J5"]},
-    "ESFP": {"name": "氛围输出机", "camp": "SP", "palette": "yellow", "tagline": "你的电脑像自带发布键，素材随时都能变成内容。", "evidence_slots": ["T2", "E1", "E2"]}
+    "ESFP": {"name": "氛围输出机", "camp": "SP", "palette": "yellow", "tagline": "你的电脑像自带发布键，素材随时都能变成内容。", "evidence_slots": ["T2", "E1", "T3"]}
   }
 }
